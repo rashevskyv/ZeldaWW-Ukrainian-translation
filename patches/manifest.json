@@ -1,0 +1,34 @@
+{
+  "format": 1,
+  "game": "The Legend of Zelda: The Wind Waker",
+  "generated_by": "publish_translation.py",
+  "files": [
+    {
+      "operation": "xdelta3",
+      "source_path": "GC/image/original (USA).iso",
+      "source_sha256": "ec2d4ee790f48bee3d4c10feed166370df895f474e8db3f9af3b16ee001436df",
+      "target_path": "GZLE01.iso",
+      "target_sha256": "d0e5f2bf4b678b349514121a5a36cb3afb3bbbd8815f9f939b5062c052f46fae",
+      "patch_path": "gc/SwitchWaker/GZLE01.iso.xdelta",
+      "patch_sha256": "27184bfffef4331e55a16ee9137b45b02f37fb99afbd3e6fd55c855cb7de16a4"
+    },
+    {
+      "operation": "xdelta3",
+      "source_path": "HD/content/Common/Pack/permanent_2d_UsEnglish.pack",
+      "source_sha256": "fa48e23be34d6c7141a5ebee951afc4bb722ce1e2ecdf515562d4ba0d2a05a7f",
+      "target_path": "content/Common/Pack/permanent_2d_UsEnglish.pack",
+      "target_sha256": "a77d617e93e7a678131e1623951031efef8c54002eeb81b29488f0581e27cf0d",
+      "patch_path": "hd/content/Common/Pack/permanent_2d_UsEnglish.pack.xdelta",
+      "patch_sha256": "0efb974a1cc08fc524994cc4550218e002f5a25b5e552a053b45c18851163c1c"
+    },
+    {
+      "operation": "copy",
+      "source_path": null,
+      "source_sha256": null,
+      "target_path": "graphicPacks/Picoripi_UA_WWHD/rules.txt",
+      "target_sha256": "2ce8b9cd95de29e71f0a5c2b1a588c6f398e93bd76db9c853ee30aa7b04e1bc1",
+      "patch_path": "hd/graphicPacks/Picoripi_UA_WWHD/rules.txt",
+      "patch_sha256": "2ce8b9cd95de29e71f0a5c2b1a588c6f398e93bd76db9c853ee30aa7b04e1bc1"
+    }
+  ]
+}

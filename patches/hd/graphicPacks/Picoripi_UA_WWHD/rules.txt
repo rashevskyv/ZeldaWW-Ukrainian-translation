@@ -1,0 +1,6 @@
+[Definition]
+titleIds = 0005000010143500
+name = Picoripi UA
+path = "The Legend of Zelda: The Wind Waker HD/Mods/Picoripi UA"
+description = Ukrainian translation (text, fonts and textures) built by Picoripi workspace scripts (WWHD_UA\2_build.bat).
+version = 7

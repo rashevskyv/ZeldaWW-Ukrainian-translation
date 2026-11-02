@@ -17,3 +17,5 @@ source/
 image/
 local_config.json
 keys.txt
+graphify-out/
+.ruff_cache/
