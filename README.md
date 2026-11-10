@@ -13,12 +13,8 @@ it verifies the SwitchWaker disc ID, GameCube magic, and original `main.dol` has
 
 Use `Build All.bat` for GameCube and HD outputs. `Play Dolphin.bat` and `Play Cemu.bat` build the matching
 target before launch. `Build SwitchWaker.bat` and `Build Wii U and SwitchWakerHD.bat` prepare their files
-for copying to the relevant SD card. `Publish Translation.bat` builds translation-only xdelta patches and
-publishes them to this repository's `origin`; use `python publish_translation.py --prepare-only` to prepare
-the package for review without staging, committing, or pushing. The publisher rejects unrelated dirty files
-and rejects a remote that does not match this repository. It reads xdelta3 and Wind Waker HD paths from the
-shared `zelda_env.ini`. Set `WINDWAKER_TRANSLATION_REPO` if this repository is outside its default location
-(`D:\git\dev\ZeldaWW-Ukrainian-translation`).
+for copying to the relevant SD card. The old xdelta `patches/` folder is gone: the translation is published
+into `patcher/files` by Picoripi (Build ROM, Build mod or Run in emulator of the Wind Waker project).
 
 Game images, extracted original game files, port binaries, keys, local settings, and saves stay outside this repository. Obtain the game data from your own copy.
 
