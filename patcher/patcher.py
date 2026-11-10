@@ -1,7 +1,7 @@
 """Ukrainian translation patcher: downloads the current translation files from GitHub and applies them to the
 user's own game dump. The mode in config.json picks the platform:
 
-- ``gc_iso``: GameCube .iso/.rvz -> a new ``<name>_UA.iso`` (gcr extract, replace files, gcr rebuild; as Twilight Princess).
+- ``gc_iso``: GameCube .iso/.rvz/.gcz/.wia/.ciso -> a new ``<name>_UA.iso`` (gcr extract, replace files, gcr rebuild; as Twilight Princess).
 - ``wiiu_files``: a Wii U game folder (code/content/meta) -> ``<name>_UA`` with a Cemu graphic pack and an SDCafiine folder.
 - ``nup``: a Switch 2 ``.nup`` package -> ``<name> (UA).nup`` plus a ``romfs`` overlay for the PC ports.
 
@@ -152,15 +152,19 @@ def apply_runs(data, runs):
         data[offset:offset + len(new)] = new
 
 
+GC_IMAGES = (".iso", ".rvz", ".gcz", ".wia", ".ciso")   # everything but .iso goes through DolphinTool
+
+
 def patch_gc(manifest, repo, work):
-    image = pick(glob.glob(os.path.join(INPUT, "*.iso")) + glob.glob(os.path.join(INPUT, "*.rvz")),
-                 "образу гри (.iso або .rvz)")
+    image = pick([p for ext in GC_IMAGES for p in glob.glob(os.path.join(INPUT, "*" + ext))],
+                 "образу гри (" + ", ".join(GC_IMAGES) + ")")
     check_free(INPUT, 3 * 1500 * 2**20)
     iso = image
-    if image.lower().endswith(".rvz"):
-        print("Розпакування RVZ у тимчасовий ISO...")
-        iso = os.path.join(work, "source.iso")
-        run(tool("rom-converto-cli-windows-x64.exe") + ["dol", "decompress", image, iso])
+    if not image.lower().endswith(".iso"):
+        print("Розпакування образу в тимчасовий ISO (DolphinTool)...")
+        iso = os.path.join(work, "source.iso")   # -u: Dolphin keeps its settings folder inside the work folder
+        run(tool("DolphinTool.exe") + ["convert", "-u", os.path.join(work, "dolphin_user"),
+                                       "-i", image, "-o", iso, "-f", "iso"])
     with open(iso, "rb") as stream:
         game_id = stream.read(8)
     if game_id[:6].decode("ascii", "replace") != manifest["game_id"] or game_id[7] != manifest["revision"]:
