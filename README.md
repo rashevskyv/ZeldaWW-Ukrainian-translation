@@ -23,3 +23,7 @@ shared `zelda_env.ini`. Set `WINDWAKER_TRANSLATION_REPO` if this repository is o
 Game images, extracted original game files, port binaries, keys, local settings, and saves stay outside this repository. Obtain the game data from your own copy.
 
 Upstream port: https://github.com/chrissotraidis/bluewake
+
+TP-style patcher for your own GameCube disc (USA, GZLE01): `patcher/` holds the changed files, `manifest.json` and
+`patcher.py`; it downloads this repository, rebuilds your .iso/.rvz into `<name>_UA.iso` and never touches the original.
+Instructions in Ukrainian: `patcher/README.md`.
