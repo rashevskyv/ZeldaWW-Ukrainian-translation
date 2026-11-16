@@ -34,7 +34,7 @@ def base_dir():
 BASE = base_dir()
 INPUT = os.path.join(BASE, "ISO")
 CORE_DIR = os.path.join(BASE, "core")   # frozen .exe: a downloaded newer patcher.py (and nup.py) lives here
-CLEAN_NAME = "Repatch_from_scratch.bat"
+CLEAN_NAME = "Перепатчити з нуля.bat"   # written by scripts\make_zip.py next to the .exe
 
 
 class Fail(Exception):
@@ -355,6 +355,17 @@ def patch_disc(manifest, repo, work, ctx):
     return output
 
 
+def build_into(output, build):
+    """Build the image into a temporary file, then replace the old result. A failed build leaves no temporary file."""
+    temporary = output + ".tmp.iso"
+    try:
+        build(temporary)
+        os.replace(temporary, output)
+    finally:
+        if os.path.exists(temporary):
+            os.remove(temporary)
+
+
 def build_gc(manifest, repo, work, iso, output):
     print("Розпакування образу...")
     unpacked = os.path.join(work, "UNP")
@@ -381,9 +392,7 @@ def build_gc(manifest, repo, work, iso, output):
         with open(dol, "wb") as out:
             out.write(data)
     print(f"Збирання образу: {os.path.basename(output)}...")
-    temporary = output + ".tmp.iso"
-    run(tool("gcr.exe") + [root, temporary])
-    os.replace(temporary, output)
+    build_into(output, lambda temporary: run(tool("gcr.exe") + [root, temporary]))
 
 
 def build_wii(manifest, repo, work, iso, output):
@@ -404,9 +413,7 @@ def build_wii(manifest, repo, work, iso, output):
             raise Fail(f"У Wii-образі немає файлу {rel}.")
         shutil.copyfile(source, target)
     print(f"Збирання образу: {os.path.basename(output)}...")
-    temporary = output + ".tmp.iso"
-    run(tool("wit.exe") + ["copy", unpacked, temporary])
-    os.replace(temporary, output)
+    build_into(output, lambda temporary: run(tool("wit.exe") + ["copy", unpacked, temporary]))
 
 
 # -- Wii U ---------------------------------------------------------------------------------------------------------
@@ -633,6 +640,62 @@ def cached_version():
         return re.search(r'^PATCHER_VERSION\s*=\s*"([^"]+)"', stream.read(4096), re.M).group(1)
 
 
+def swap_script(exe, new, argv):
+    """Batch file: after the old .exe exits, move it to ``.bak``, put the new .exe in its place and start it."""
+    args = subprocess.list2cmdline(argv)
+    lines = ["@echo off", "chcp 65001 >nul", f'set "EXE={exe}"', f'set "NEW={new}"', 'set "BAK=%EXE%.bak"',
+             "set /a TRIES=0", ":wait", "set /a TRIES+=1", "if %TRIES% GEQ 60 exit /b 1",
+             "ping -n 2 127.0.0.1 >nul", 'move /y "%EXE%" "%BAK%" >nul 2>&1', "if errorlevel 1 goto wait",
+             'move /y "%NEW%" "%EXE%" >nul 2>&1',
+             'if errorlevel 1 (move /y "%BAK%" "%EXE%" >nul & goto wait)',
+             f'"%EXE%" {args}', 'del "%~f0" >nul 2>&1', ""]
+    return "\r\n".join(lines)
+
+
+def check_exe_update(config, argv):
+    """Frozen .exe only: download a newer .exe next to this one. A small .bat swaps it in after this process exits.
+    Returns True when the swap was started (the caller then exits). Off unless config has exe_url and exe_version_url."""
+    if not getattr(sys, "frozen", False) or os.environ.get("UA_NO_SELF_UPDATE") or not config.get("exe_url"):
+        return False
+    exe = sys.executable
+    try:
+        remote = fetch_text(config["exe_version_url"]).strip()
+    except (OSError, ValueError, KeyError):
+        print("Перевірка нового .exe пропущена (немає з'єднання з GitHub).")
+        return False
+    if not re.fullmatch(r"\d+(\.\d+)*", remote) or version_tuple(remote) <= version_tuple(PATCHER_VERSION):
+        return False
+    new = exe + ".new"
+    print(f"Знайдено новіший патчер .exe: {remote} (у вас {PATCHER_VERSION}). Завантажую...")
+    try:
+        request = urllib.request.Request(config["exe_url"], headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0)"})
+        with urllib.request.urlopen(request, timeout=120) as response, open(new, "wb") as out:
+            shutil.copyfileobj(response, out)
+        with open(new, "rb") as stream:
+            if stream.read(2) != b"MZ" or os.path.getsize(new) < 1_000_000:
+                raise ValueError("це не .exe")
+    except (OSError, ValueError) as error:
+        print(f"Не вдалося завантажити новий .exe ({error}); працюю з поточним.")
+        if os.path.exists(new):
+            os.remove(new)
+        return False
+    bat = os.path.join(tempfile.gettempdir(), f"ua_patcher_swap_{os.getpid()}.bat")
+    with open(bat, "w", encoding="utf-8", newline="") as out:
+        out.write(swap_script(exe, new, argv))
+    subprocess.Popen(["cmd", "/c", bat], creationflags=subprocess.CREATE_NEW_CONSOLE, close_fds=True)
+    print("Новий .exe встановлюється. Цей запуск завершується; патчер запуститься знову сам.")
+    return True
+
+
+def remove_swap_backup():
+    """A new .exe that runs has replaced the old one: its ``.bak`` copy is no longer needed."""
+    if getattr(sys, "frozen", False):
+        try:
+            os.remove(sys.executable + ".bak")
+        except OSError:
+            pass
+
+
 def run_core(path, argv):
     """Run a newer patcher.py in this process (frozen .exe) or as a child process (plain Python)."""
     if getattr(sys, "frozen", False):
@@ -658,7 +721,10 @@ def main(argv):
     print(f"  {config['title']} — патчер українського перекладу (версія {PATCHER_VERSION})")
     print("=" * 60 + "\n")
     os.makedirs(INPUT, exist_ok=True)
+    remove_swap_backup()
     if not os.environ.get("UA_CORE_LOADED"):
+        if check_exe_update(config, argv):
+            sys.exit(0)
         newer = check_self_update(config)
         if newer:
             run_core(newer, argv)
