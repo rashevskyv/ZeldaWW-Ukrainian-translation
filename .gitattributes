@@ -1,1 +1,2 @@
 patcher/files/** -text
+patcher/*.exe binary

@@ -22,7 +22,7 @@ import tempfile
 import urllib.request
 import zipfile
 
-PATCHER_VERSION = "1.2.0"
+PATCHER_VERSION = "1.2.1"
 
 
 def base_dir():
@@ -652,28 +652,37 @@ def swap_script(exe, new, argv):
     return "\r\n".join(lines)
 
 
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as stream:
+        for block in iter(lambda: stream.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
 def check_exe_update(config, argv):
-    """Frozen .exe only: download a newer .exe next to this one. A small .bat swaps it in after this process exits.
-    Returns True when the swap was started (the caller then exits). Off unless config has exe_url and exe_version_url."""
+    """Frozen .exe only: when the repo's committed .exe differs from this one, download it next to this one.
+    A small .bat swaps it in after this process exits. Returns True when the swap was started (the caller then exits).
+    Off unless config has exe_url and exe_info_url. exe_info_url is JSON: {"version": "...", "sha256": "..."}."""
     if not getattr(sys, "frozen", False) or os.environ.get("UA_NO_SELF_UPDATE") or not config.get("exe_url"):
         return False
     exe = sys.executable
     try:
-        remote = fetch_text(config["exe_version_url"]).strip()
+        info = json.loads(fetch_text(config["exe_info_url"]))
+        remote_sha = str(info["sha256"]).lower()
     except (OSError, ValueError, KeyError):
         print("Перевірка нового .exe пропущена (немає з'єднання з GitHub).")
         return False
-    if not re.fullmatch(r"\d+(\.\d+)*", remote) or version_tuple(remote) <= version_tuple(PATCHER_VERSION):
+    if sha256_file(exe) == remote_sha:
         return False
     new = exe + ".new"
-    print(f"Знайдено новіший патчер .exe: {remote} (у вас {PATCHER_VERSION}). Завантажую...")
+    print(f"Знайдено новіший патчер .exe: {info.get('version', '?')} (у вас {PATCHER_VERSION}). Завантажую...")
     try:
         request = urllib.request.Request(config["exe_url"], headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0)"})
         with urllib.request.urlopen(request, timeout=120) as response, open(new, "wb") as out:
             shutil.copyfileobj(response, out)
-        with open(new, "rb") as stream:
-            if stream.read(2) != b"MZ" or os.path.getsize(new) < 1_000_000:
-                raise ValueError("це не .exe")
+        if sha256_file(new) != remote_sha:
+            raise ValueError("контрольна сума не збігається")
     except (OSError, ValueError) as error:
         print(f"Не вдалося завантажити новий .exe ({error}); працюю з поточним.")
         if os.path.exists(new):
@@ -682,7 +691,12 @@ def check_exe_update(config, argv):
     bat = os.path.join(tempfile.gettempdir(), f"ua_patcher_swap_{os.getpid()}.bat")
     with open(bat, "w", encoding="utf-8", newline="") as out:
         out.write(swap_script(exe, new, argv))
-    subprocess.Popen(["cmd", "/c", bat], creationflags=subprocess.CREATE_NEW_CONSOLE, close_fds=True)
+    # tests (UA_PATCHER_NO_PAUSE) run the swap without a visible console window
+    flags = subprocess.CREATE_NO_WINDOW if os.environ.get("UA_PATCHER_NO_PAUSE") else subprocess.CREATE_NEW_CONSOLE
+    # The old .exe's PyInstaller bootloader leaves _PYI_* and _MEI* variables in the environment. The new .exe
+    # inherits them and exits with -1 before it runs, so its .bak cleanup never happens. Drop them here.
+    env = {key: value for key, value in os.environ.items() if not key.startswith(("_PYI_", "_MEI"))}
+    subprocess.Popen(["cmd", "/c", bat], creationflags=flags, close_fds=True, env=env)
     print("Новий .exe встановлюється. Цей запуск завершується; патчер запуститься знову сам.")
     return True
 
@@ -716,12 +730,12 @@ MODES = {"gc_iso": patch_disc, "disc": patch_disc, "wiiu_files": patch_wiiu, "nu
 
 def main(argv):
     clean = "--clean" in argv
+    remove_swap_backup()  # first, so a failing start still clears the .bak from an exe swap
     config = json.load(open(os.path.join(BASE, "config.json"), encoding="utf-8"))
     print("=" * 60)
     print(f"  {config['title']} — патчер українського перекладу (версія {PATCHER_VERSION})")
     print("=" * 60 + "\n")
     os.makedirs(INPUT, exist_ok=True)
-    remove_swap_backup()
     if not os.environ.get("UA_CORE_LOADED"):
         if check_exe_update(config, argv):
             sys.exit(0)
